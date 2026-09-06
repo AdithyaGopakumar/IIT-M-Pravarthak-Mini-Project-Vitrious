@@ -1,0 +1,200 @@
+"""Investigation Agent — LLM node.
+
+Investigates one SKU at one warehouse by calling inventory and sales tools,
+then running the deterministic stock-risk calculation to decide whether
+replenishment action is needed.
+
+Tools available: get_product, get_stock_position, get_sales_velocity,
+                 calculate_stock_risk
+"""
+
+from __future__ import annotations
+
+from langchain_core.messages import SystemMessage
+from langchain_openai import ChatOpenAI
+
+from submission.config import MODEL_NAME, OPENAI_API_KEY
+from submission.contracts.agent_outputs import InvestigationResult
+from submission.nodes.audit import audit_node
+from submission.state.state import InventraState
+from tools.langchain_tools import build_langchain_tools
+
+
+# ── System prompt ──────────────────────────────────────────────────────────
+
+INVESTIGATION_PROMPT = """\
+You are the Investigation Agent in the Vitrious stockout resolution system.
+
+## Your Objective
+Investigate one SKU at one warehouse. Determine if replenishment action is needed.
+
+## Process
+1. Call get_product to verify the SKU exists and is active.
+2. Call get_stock_position to get the latest inventory snapshot.
+3. Call get_sales_velocity to get 7-day and 30-day sales averages.
+4. Call calculate_stock_risk with:
+   - available_units = on_hand - reserved + confirmed_inbound
+   - daily_velocity = the 7-day sales average (prefer recent data)
+   - target_cover_days = from the case input
+   - snapshot_captured_at = captured_at from the stock position
+
+## Decision Rules
+- If get_product returns NOT_FOUND → status = NEEDS_INFORMATION
+- If get_product returns INACTIVE → status = BLOCKED
+- If get_sales_velocity returns INSUFFICIENT_DATA → status = NEEDS_INFORMATION
+- If calculate_stock_risk returns stale = true → status = BLOCKED (cite DATA_STALE)
+- If at_risk = false → status = NO_ACTION
+- If at_risk = true → status = AT_RISK
+
+## Critical Rules
+- NEVER invent stock levels, sales figures, or dates. Use ONLY tool outputs.
+- Always cite evidence_id values from tool outputs in your reasoning.
+- If a tool returns an error, report it immediately — do not guess around it.
+- Your reasoning field must explain WHY you reached your conclusion using specific numbers.
+"""
+
+
+# ── Tool filtering ─────────────────────────────────────────────────────────
+
+_INVESTIGATION_TOOL_NAMES = frozenset(
+    ["get_product", "get_stock_position", "get_sales_velocity", "calculate_stock_risk"]
+)
+
+
+def _get_investigation_tools():
+    """Return only the tools this agent is permitted to use."""
+    all_tools = build_langchain_tools(include_write_tools=False)
+    return [t for t in all_tools if t.name in _INVESTIGATION_TOOL_NAMES]
+
+
+# ── Agent constructor ──────────────────────────────────────────────────────
+
+def _build_investigation_agent():
+    """Create the investigation agent with bound tools and structured output."""
+    llm = ChatOpenAI(
+        model=MODEL_NAME,
+        api_key=OPENAI_API_KEY,
+        temperature=0,
+    )
+    tools = _get_investigation_tools()
+    llm_with_tools = llm.bind_tools(tools)
+    return llm_with_tools, tools
+
+
+# ── Node function ──────────────────────────────────────────────────────────
+
+def investigation_agent_node(state: InventraState) -> dict:
+    """Run the investigation agent and return state updates.
+
+    Uses the ReAct pattern: the LLM calls tools iteratively until it
+    has enough evidence, then produces a structured InvestigationResult.
+    """
+    from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+
+    llm_with_tools, tools = _build_investigation_agent()
+    tool_map = {t.name: t for t in tools}
+
+    # Build initial messages
+    messages = [
+        SystemMessage(content=INVESTIGATION_PROMPT),
+        HumanMessage(
+            content=(
+                f"Investigate SKU '{state['sku']}' at warehouse '{state['warehouse_id']}' "
+                f"with target cover of {state['target_cover_days']} days. "
+                f"Case ID: {state['case_id']}."
+            )
+        ),
+    ]
+
+    # ReAct loop: let the LLM call tools until it's done
+    max_iterations = 10
+    for _ in range(max_iterations):
+        response = llm_with_tools.invoke(messages)
+        messages.append(response)
+
+        # If no tool calls, the agent is done
+        if not response.tool_calls:
+            break
+
+        # Execute each tool call
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+            if tool_name in tool_map:
+                result = tool_map[tool_name].invoke(tool_args)
+                tool_msg = ToolMessage(
+                    content=str(result),
+                    tool_call_id=tool_call["id"],
+                )
+                messages.append(tool_msg)
+
+                # Store evidence in state
+                if tool_name == "get_product":
+                    state_updates_evidence = {"product": result if isinstance(result, dict) else result}
+                elif tool_name == "get_stock_position":
+                    state_updates_evidence = {"stock_position": result if isinstance(result, dict) else result}
+                elif tool_name == "get_sales_velocity":
+                    state_updates_evidence = {"sales_velocity": result if isinstance(result, dict) else result}
+                elif tool_name == "calculate_stock_risk":
+                    state_updates_evidence = {"stock_risk": result if isinstance(result, dict) else result}
+
+    # Now ask the LLM to produce the structured output
+    structured_llm = ChatOpenAI(
+        model=MODEL_NAME,
+        api_key=OPENAI_API_KEY,
+        temperature=0,
+    ).with_structured_output(InvestigationResult)
+
+    messages.append(
+        HumanMessage(
+            content="Based on all the evidence gathered, produce your structured InvestigationResult now."
+        )
+    )
+
+    try:
+        result: InvestigationResult = structured_llm.invoke(messages)
+        result_dict = result.model_dump(mode="json")
+    except Exception as e:
+        # Validation failed — return BLOCKED
+        result_dict = InvestigationResult(
+            status="BLOCKED",
+            sku=state.get("sku", ""),
+            warehouse_id=state.get("warehouse_id", ""),
+            reasoning=f"Agent output validation failed: {str(e)}",
+            error_code="INVALID_INPUT",
+            error_message=str(e),
+        ).model_dump(mode="json")
+
+    # Log audit event
+    audit_update = audit_node(
+        state,
+        actor="agent:investigation",
+        event_type="investigation_completed",
+        payload={
+            "status": result_dict.get("status"),
+            "at_risk": result_dict.get("at_risk"),
+            "cover_days": result_dict.get("cover_days"),
+            "stale": result_dict.get("stale"),
+        },
+    )
+
+    # Build final state updates
+    updates = {
+        "investigation_result": result_dict,
+        "messages": messages,
+        **audit_update,
+    }
+
+    # Propagate evidence stored during tool calls
+    if state.get("product") is None and "product" in locals().get("state_updates_evidence", {}):
+        updates["product"] = state_updates_evidence["product"]
+
+    # Set outcome for terminal statuses
+    status = result_dict.get("status")
+    if status in ("NO_ACTION", "BLOCKED", "NEEDS_INFORMATION"):
+        updates["outcome"] = status
+        if status == "BLOCKED":
+            updates["error_code"] = result_dict.get("error_code", "DATA_STALE")
+            updates["error_message"] = result_dict.get("error_message", result_dict.get("reasoning", ""))
+
+    return updates
