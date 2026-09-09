@@ -152,6 +152,19 @@ def create_purchase_request(
                 now,
             )
         )
+        
+        # Update the monthly budget to reflect the newly committed funds
+        budget_month = now.strftime("%Y-%m")
+        cursor.execute(
+            """
+            UPDATE monthly_budgets
+            SET committed_amount = committed_amount + ?,
+                updated_at = ?
+            WHERE warehouse_id = ? AND month = ?
+            """,
+            (proposal.total_cost, now, proposal.warehouse_id, budget_month)
+        )
+        
         conn.commit()
         conn.close()
         

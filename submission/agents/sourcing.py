@@ -47,12 +47,9 @@ Recommend a vendor with a clear cost-vs-speed trade-off explanation.
 - If a recommendation exists and fits budget → status = PROPOSAL_READY
 - If vendor_performance or budget data has errors → status = NEEDS_INFORMATION
 
-## Trade-off Explanation
-When there are multiple options, your trade_off_explanation must:
-- Name the cheapest option and its arrival date
-- Name the fastest option and its cost
-- Explain which was chosen and WHY, citing evidence IDs
-- If the cheapest cannot arrive before stockout, say so explicitly
+## Output Fields Formatting
+- `all_options_summary`: MUST be a Markdown bulleted list of the top 3 available options, including each option's total cost, expected arrival date, and the reason for its selection or rejection.
+- `trade_off_explanation`: MUST state the final recommendation and concisely explain the reason for choosing it over the alternatives (do NOT duplicate the full list here). If the cheapest option cannot arrive before stockout, state this explicitly.
 
 ## Critical Rules
 - NEVER invent prices, lead times, reliability scores, or budget figures.

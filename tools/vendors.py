@@ -4,6 +4,7 @@ Read-only tools for vendor offers and performance metrics.
 """
 
 import sqlite3
+import math
 from datetime import datetime
 from typing import List, Optional
 from domain.tool_models import (
@@ -201,8 +202,9 @@ def build_vendor_options(
             continue
         
         # Calculate order quantity (at least MOQ)
-        needed_units = max(offer.moq, int(stock_risk.available_units * 0.5))
-        quantity = max(offer.moq, needed_units)
+        target_units = math.ceil(stock_risk.target_cover_days * stock_risk.daily_velocity)
+        deficit = max(0, target_units - stock_risk.available_units)
+        quantity = max(offer.moq, deficit)
         
         # Calculate costs
         total_cost = quantity * offer.unit_price

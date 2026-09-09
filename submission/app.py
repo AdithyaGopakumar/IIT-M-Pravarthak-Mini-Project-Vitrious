@@ -153,10 +153,18 @@ def main():
             icon = "✅" if src_status == "PROPOSAL_READY" else "🚫"
             with st.expander(f"3️⃣  Sourcing — {icon} {src_status}", expanded=True):
                 st.write(src.get("reasoning", "No reasoning available."))
+                if src.get("all_options_summary"):
+                    st.markdown("**Available Options:**")
+                    st.markdown(src['all_options_summary'].replace('$', r'\$'))
                 if src.get("trade_off_explanation"):
-                    st.info(f"**Trade-off:** {src['trade_off_explanation']}")
+                    trade_off = src['trade_off_explanation'].replace('`', '').replace('$', r'\$').strip()
+                    st.markdown(f"**Trade-off:** {trade_off}")
                 col_a, col_b, col_c = st.columns(3)
-                col_a.metric("Recommended Vendor", src.get("recommended_vendor_id", "—"))
+                
+                vendor_id = src.get("recommended_vendor_id", "—")
+                vendor_name = src.get("recommended_vendor_name", "")
+                vendor_display = vendor_name if vendor_name else vendor_id
+                col_a.metric("Recommended Vendor", vendor_display)
                 col_b.metric("Total Cost", f"${src.get('total_cost', 0):,.2f}")
                 col_c.metric("Budget Remaining", f"${src.get('budget_remaining', 0):,.2f}")
                 if src.get("is_over_budget"):

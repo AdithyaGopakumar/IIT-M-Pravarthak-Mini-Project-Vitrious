@@ -50,7 +50,7 @@ Investigate one SKU at one warehouse. Determine if replenishment action is neede
 - NEVER invent stock levels, sales figures, or dates. Use ONLY tool outputs.
 - Always cite evidence_id values from tool outputs in your reasoning.
 - If a tool returns an error, report it immediately — do not guess around it.
-- Your reasoning field must explain WHY you reached your conclusion using specific numbers.
+- Your reasoning field must explain WHY you reached your conclusion using specific numbers. You MUST explicitly state how many days the current stock will last and the projected date when the stock will run out.
 """
 
 

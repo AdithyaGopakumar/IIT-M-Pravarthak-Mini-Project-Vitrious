@@ -56,7 +56,7 @@ class InvestigationResult(BaseModel):
     # Agent reasoning
     reasoning: str = Field(
         ...,
-        description="Human-readable explanation of the investigation findings and decision",
+        description="Human-readable explanation of findings. MUST explicitly state how many days stock will last and the projected stockout date.",
     )
 
     # Error details
@@ -110,7 +110,7 @@ class SourcingResult(BaseModel):
     )
     all_options_summary: str = Field(
         default="",
-        description="Summary of all vendor options considered (eligible and ineligible)",
+        description="MUST be a Markdown bulleted list of the top 3 available vendor options, including proper reasons why each was selected or not.",
     )
     reasoning: str = Field(
         ...,
