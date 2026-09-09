@@ -107,6 +107,7 @@ def investigation_agent_node(state: InventraState) -> dict:
     ]
 
     # ReAct loop: let the LLM call tools until it's done
+    evidence_updates = {}
     max_iterations = 10
     for _ in range(max_iterations):
         response = llm_with_tools.invoke(messages)
@@ -130,13 +131,13 @@ def investigation_agent_node(state: InventraState) -> dict:
 
                 # Store evidence in state
                 if tool_name == "get_product":
-                    state_updates_evidence = {"product": result if isinstance(result, dict) else result}
+                    evidence_updates["product"] = result if isinstance(result, dict) else result
                 elif tool_name == "get_stock_position":
-                    state_updates_evidence = {"stock_position": result if isinstance(result, dict) else result}
+                    evidence_updates["stock_position"] = result if isinstance(result, dict) else result
                 elif tool_name == "get_sales_velocity":
-                    state_updates_evidence = {"sales_velocity": result if isinstance(result, dict) else result}
+                    evidence_updates["sales_velocity"] = result if isinstance(result, dict) else result
                 elif tool_name == "calculate_stock_risk":
-                    state_updates_evidence = {"stock_risk": result if isinstance(result, dict) else result}
+                    evidence_updates["stock_risk"] = result if isinstance(result, dict) else result
 
     # Now ask the LLM to produce the structured output
     structured_llm = ChatOpenAI(
@@ -182,12 +183,9 @@ def investigation_agent_node(state: InventraState) -> dict:
     updates = {
         "investigation_result": result_dict,
         "messages": messages,
+        **evidence_updates,
         **audit_update,
     }
-
-    # Propagate evidence stored during tool calls
-    if state.get("product") is None and "product" in locals().get("state_updates_evidence", {}):
-        updates["product"] = state_updates_evidence["product"]
 
     # Set outcome for terminal statuses
     status = result_dict.get("status")

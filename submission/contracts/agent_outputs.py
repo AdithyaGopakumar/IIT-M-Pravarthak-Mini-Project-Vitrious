@@ -8,7 +8,7 @@ and correctly typed — no free-form prose parsing required.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -126,6 +126,14 @@ class SourcingResult(BaseModel):
 # Review Agent Output
 # ============================================================================
 
+class PolicyQuestionAnswer(BaseModel):
+    """One policy review question and its evidence-based answer."""
+
+    question: str = Field(..., description="The policy question (e.g., 'Q1: Is the inventory snapshot fresh enough?')")
+    answer: str = Field(..., description="Evidence-based answer citing specific data points")
+    passed: bool = Field(..., description="True if this question is satisfactorily answered")
+
+
 class ReviewResult(BaseModel):
     """Structured output from the Review Agent.
 
@@ -148,12 +156,9 @@ class ReviewResult(BaseModel):
         default_factory=list,
         description="Specific policy concerns identified, referencing question numbers",
     )
-    policy_questions_answered: Dict[str, str] = Field(
-        default_factory=dict,
-        description=(
-            "Maps each policy review question (e.g., 'Q1_freshness') "
-            "to an evidence-based answer"
-        ),
+    policy_questions_answered: List[PolicyQuestionAnswer] = Field(
+        default_factory=list,
+        description="List of policy review questions with evidence-based answers",
     )
     evidence_complete: bool = Field(
         default=True, description="True if all required evidence IDs are present"
@@ -171,3 +176,4 @@ class ReviewResult(BaseModel):
         default="",
         description="Key points the human approver should know when making their decision",
     )
+

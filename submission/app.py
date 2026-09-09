@@ -41,59 +41,7 @@ def init_session():
         st.session_state.is_paused = False
 
 
-def render_approval_ui(graph, thread_id, state_dict):
-    """Render the UI for the human approval interrupt."""
-    st.warning("⚠️ Human Approval Required")
-    
-    approval_request = state_dict.get("approval_request", {})
-    proposal = approval_request.get("proposal", {})
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Proposal Details")
-        st.write(f"**SKU:** {proposal.get('sku')}")
-        st.write(f"**Warehouse:** {proposal.get('warehouse_id')}")
-        st.write(f"**Vendor:** {proposal.get('recommended_vendor_id')}")
-        st.write(f"**Quantity:** {proposal.get('quantity')}")
-        st.write(f"**Total Cost:** ${proposal.get('total_cost', 0):.2f}")
-        
-    with col2:
-        st.subheader("Policy Review")
-        st.write(f"**Passed Policy:** {proposal.get('policy_passed')}")
-        if proposal.get('policy_violations'):
-            st.error("Violations:")
-            for v in proposal.get('policy_violations', []):
-                st.write(f"- {v}")
-    
-    st.subheader("Agent Reasoning")
-    st.info(proposal.get("recommendation_reasoning", "No reasoning provided."))
-    
-    with st.form("approval_form"):
-        decision = st.radio("Decision", ["APPROVED", "REJECTED"])
-        comments = st.text_area("Comments")
-        submitted = st.form_submit_button("Submit Decision")
-        
-        if submitted:
-            decision_payload = {
-                "decision": decision,
-                "approver": "StreamlitUser",
-                "comments": comments,
-                "proposal_id": proposal.get("proposal_id", "")
-            }
-            
-            with st.spinner(f"Processing {decision}..."):
-                # Resume the graph by passing the Command to the human_approval node
-                config = {"configurable": {"thread_id": thread_id}}
-                graph.invoke(
-                    Command(resume=decision_payload),
-                    config=config
-                )
-                
-                # Update session state with the new graph state
-                st.session_state.current_state = graph.get_state(config).values
-                st.session_state.is_paused = False
-                st.rerun()
+
 
 
 def main():
@@ -120,18 +68,22 @@ def main():
                 with st.spinner("Agents are investigating..."):
                     try:
                         # Invoke graph; it will run until it hits the interrupt or END
-                        final_state = graph.invoke(initial_state, config=config)
-                        st.session_state.current_state = final_state
-                        st.session_state.is_paused = False
+                        graph.invoke(initial_state, config=config)
                     except Exception as e:
-                        # Check if it stopped due to interrupt
-                        current_graph_state = graph.get_state(config)
-                        if current_graph_state.next and "human_approval" in current_graph_state.next:
-                            st.session_state.current_state = current_graph_state.values
-                            st.session_state.is_paused = True
-                        else:
-                            st.error(f"Execution failed: {str(e)}")
-                            st.session_state.current_state = current_graph_state.values
+                        st.error(f"Execution error: {str(e)}")
+                    
+                    # Check graph state — interrupt() returns normally,
+                    # so we always need to inspect .next after invoke
+                    current_graph_state = graph.get_state(config)
+                    st.session_state.current_state = current_graph_state.values
+                    
+                    if current_graph_state.next:
+                        # Graph is paused (e.g. at human_approval interrupt)
+                        st.session_state.is_paused = True
+                    else:
+                        # Graph completed
+                        st.session_state.is_paused = False
+
                 st.rerun()
 
     # Main content area
@@ -145,9 +97,9 @@ def main():
         
     st.header(f"Case: {state.get('case_id')}")
     
-    # Show interrupt UI if paused
+    # Hide interrupt UI from top level (moved into the tabs)
     if st.session_state.is_paused:
-        render_approval_ui(graph, st.session_state.thread_id, state)
+        st.warning("⚠️ Human Approval Required. See the Summary tab below.")
         st.divider()
         
     # Show final outcome if finished
@@ -163,8 +115,147 @@ def main():
                 st.write(f"**Error:** {state.get('error_message')}")
         
     # Show tabs with state details
-    tab1, tab2, tab3, tab4 = st.tabs(["Investigation", "Sourcing", "Execution", "Audit Log"])
-    
+    tab_summary, tab1, tab2, tab3, tab4 = st.tabs(
+        ["📋 Summary", "🔍 Investigation", "🏭 Sourcing", "✅ Execution", "📜 Audit Log"]
+    )
+
+    # ── Summary tab — product-like reasoning & action view ──
+    with tab_summary:
+        st.subheader("Decision Flow")
+
+        # Step 1: Input
+        with st.expander("1️⃣  Request Received", expanded=True):
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric("SKU", state.get("sku", "—"))
+            col_b.metric("Warehouse", state.get("warehouse_id", "—"))
+            col_c.metric("Target Cover", f"{state.get('target_cover_days', '—')} days")
+
+        # Step 2: Investigation reasoning
+        inv = state.get("investigation_result")
+        if inv:
+            inv_status = inv.get("status", "—")
+            icon = "✅" if inv_status == "NO_ACTION" else ("⚠️" if inv_status == "AT_RISK" else "🚫")
+            with st.expander(f"2️⃣  Investigation — {icon} {inv_status}", expanded=True):
+                st.write(inv.get("reasoning", "No reasoning available."))
+                col_a, col_b, col_c = st.columns(3)
+                col_a.metric("Available Units", inv.get("available_units", "—"))
+                col_b.metric("Cover Days", f"{inv.get('cover_days', 0):.1f}")
+                col_c.metric("Daily Velocity", f"{inv.get('daily_velocity', 0):.1f} units/day")
+                if inv.get("stale"):
+                    st.error("⚠️ Inventory data is **stale** (older than 48 hours).")
+                if inv.get("error_message"):
+                    st.warning(inv["error_message"])
+
+        # Step 3: Sourcing reasoning
+        src = state.get("sourcing_result")
+        if src:
+            src_status = src.get("status", "—")
+            icon = "✅" if src_status == "PROPOSAL_READY" else "🚫"
+            with st.expander(f"3️⃣  Sourcing — {icon} {src_status}", expanded=True):
+                st.write(src.get("reasoning", "No reasoning available."))
+                if src.get("trade_off_explanation"):
+                    st.info(f"**Trade-off:** {src['trade_off_explanation']}")
+                col_a, col_b, col_c = st.columns(3)
+                col_a.metric("Recommended Vendor", src.get("recommended_vendor_id", "—"))
+                col_b.metric("Total Cost", f"${src.get('total_cost', 0):,.2f}")
+                col_c.metric("Budget Remaining", f"${src.get('budget_remaining', 0):,.2f}")
+                if src.get("is_over_budget"):
+                    st.error("💰 Proposed cost **exceeds** the remaining monthly budget.")
+                if src.get("error_message"):
+                    st.warning(src["error_message"])
+
+        # Step 4: Review reasoning
+        rev = state.get("review_result")
+        if rev:
+            rev_status = rev.get("status", "—")
+            icon = "✅" if rev_status == "APPROVED_FOR_HUMAN" else ("🔄" if rev_status == "NEEDS_REVISION" else "🚫")
+            with st.expander(f"4️⃣  Policy Review — {icon} {rev_status}", expanded=True):
+                st.write(rev.get("reasoning", "No reasoning available."))
+                if rev.get("recommendation_for_approver"):
+                    st.success(f"**For Approver:** {rev['recommendation_for_approver']}")
+                if rev.get("policy_violations"):
+                    st.error("**Policy Violations:**")
+                    for v in rev["policy_violations"]:
+                        st.write(f"  - {v}")
+
+        # Step 5: Human Approval action
+        approval = state.get("approval_decision")
+        if approval:
+            decision = approval.get("decision", "—")
+            icon = "✅" if decision == "APPROVED" else "❌"
+            with st.expander(f"5️⃣  Human Decision — {icon} {decision}", expanded=True):
+                st.write(f"**Approver:** {approval.get('approver', '—')}")
+                st.write(f"**Decision:** {decision}")
+                if approval.get("comments"):
+                    st.write(f"**Comments:** {approval['comments']}")
+        elif st.session_state.is_paused:
+            with st.expander("5️⃣  Human Decision — ⏳ Awaiting Your Input", expanded=True):
+                approval_request = state.get("approval_request") or {}
+                # The proposal is guaranteed to be fully populated inside the approval_request
+                proposal = approval_request.get("proposal") or state.get("proposal") or {}
+                review = state.get("review_result") or {}
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Proposal Details:**")
+                    st.write(f"- **SKU:** {proposal.get('sku')}")
+                    st.write(f"- **Warehouse:** {proposal.get('warehouse_id')}")
+                    st.write(f"- **Vendor:** {proposal.get('recommended_vendor_id')}")
+                    st.write(f"- **Quantity:** {proposal.get('quantity')}")
+                    st.write(f"- **Total Cost:** ${proposal.get('total_cost', 0):.2f}")
+                    
+                with col2:
+                    st.write("**Policy Review:**")
+                    st.write(f"- **Passed Policy:** {proposal.get('policy_passed')}")
+                    if proposal.get('policy_violations'):
+                        st.error("Violations:")
+                        for v in proposal.get('policy_violations', []):
+                            st.write(f"  - {v}")
+                
+                # Reasoning comes from the review agent, not the proposal itself
+                st.info(f"**Agent Reasoning:** {review.get('reasoning', 'No reasoning provided.')}")
+                
+                with st.form("approval_form"):
+                    decision_radio = st.radio("Decision", ["APPROVED", "REJECTED"])
+                    comments = st.text_area("Comments")
+                    submitted = st.form_submit_button("Submit Decision")
+                    
+                    if submitted:
+                        decision_payload = {
+                            "decision": decision_radio,
+                            "approver": "StreamlitUser",
+                            "comments": comments,
+                            "proposal_id": proposal.get("proposal_id", "")
+                        }
+                        
+                        with st.spinner(f"Processing {decision_radio}..."):
+                            config = {"configurable": {"thread_id": st.session_state.thread_id}}
+                            try:
+                                graph.invoke(Command(resume=decision_payload), config=config)
+                            except Exception as e:
+                                st.error(f"Resume error: {str(e)}")
+                            
+                            current_graph_state = graph.get_state(config)
+                            st.session_state.current_state = current_graph_state.values
+                            st.session_state.is_paused = bool(current_graph_state.next)
+                            st.rerun()
+
+        # Step 6: Execution result
+        pr = state.get("purchase_request")
+        if pr:
+            with st.expander("6️⃣  Execution — ✅ Purchase Request Created", expanded=True):
+                st.write(f"**Request ID:** `{pr.get('request_id', '—')}`")
+                st.write(f"**Status:** {pr.get('status', '—')}")
+                st.write(f"**Idempotent Hit:** {'Yes (duplicate prevented)' if not pr.get('created') else 'No (new request)'}")
+        elif state.get("outcome") == "BLOCKED" and state.get("revalidation_result"):
+            reval = state["revalidation_result"]
+            with st.expander("6️⃣  Execution — 🚫 Revalidation Failed", expanded=True):
+                st.error("Data changed while waiting for approval. Purchase request was **not** created.")
+                st.write(f"- Stock valid: {reval.get('stock_valid')}")
+                st.write(f"- Offer valid: {reval.get('offer_valid')}")
+                st.write(f"- Budget valid: {reval.get('budget_valid')}")
+
+    # ── Investigation tab — raw JSON ──
     with tab1:
         inv_res = state.get("investigation_result")
         if inv_res:
@@ -172,6 +263,7 @@ def main():
         else:
             st.write("No investigation result.")
             
+    # ── Sourcing tab — raw JSON ──
     with tab2:
         src_res = state.get("sourcing_result")
         if src_res:
@@ -179,6 +271,7 @@ def main():
         else:
             st.write("No sourcing result.")
             
+    # ── Execution tab — raw JSON ──
     with tab3:
         pr = state.get("purchase_request")
         if pr:
@@ -186,6 +279,7 @@ def main():
         else:
             st.write("No purchase request.")
             
+    # ── Audit Log tab ──
     with tab4:
         events = state.get("audit_events", [])
         if events:

@@ -97,6 +97,7 @@ def review_agent_node(state: InventraState) -> dict:
         f"- Sales evidence: {investigation.get('sales_evidence_id')}\n\n"
         f"## Sourcing Evidence\n"
         f"- Recommended vendor: {sourcing.get('recommended_vendor_name')}\n"
+        f"- Valid vendor options: {', '.join([opt.get('vendor_name', '') for opt in state.get('vendor_options', {}).get('eligible_options', [])])}\n"
         f"- Total cost: ${sourcing.get('total_cost', 0):.2f}\n"
         f"- Budget remaining: ${sourcing.get('budget_remaining', 0):.2f}\n"
         f"- Over budget: {sourcing.get('is_over_budget')}\n"

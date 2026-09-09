@@ -113,7 +113,7 @@ def draft_replenishment_proposal(input: ProposalDraftInput) -> ReplenishmentProp
         warehouse_id=input.warehouse_id,
         stock_evidence_id=input.stock.evidence_id,
         sales_evidence_id=input.sales.evidence_id,
-        vendor_evidence_ids=[],
+        vendor_evidence_ids=[option.offer_id],  # Trace back to the specific offer
         budget_evidence_id=input.budget.evidence_id,
         available_units=input.risk.available_units,
         daily_velocity=input.risk.daily_velocity,
