@@ -178,9 +178,7 @@ def main():
             rev_status = rev.get("status", "—")
             icon = "✅" if rev_status == "APPROVED_FOR_HUMAN" else ("🔄" if rev_status == "NEEDS_REVISION" else "🚫")
             with st.expander(f"4️⃣  Policy Review — {icon} {rev_status}", expanded=True):
-                st.write(rev.get("reasoning", "No reasoning available."))
-                if rev.get("recommendation_for_approver"):
-                    st.success(f"**For Approver:** {rev['recommendation_for_approver']}")
+                st.markdown(rev.get("reasoning", "No reasoning available."))
                 if rev.get("policy_violations"):
                     st.error("**Policy Violations:**")
                     for v in rev["policy_violations"]:
@@ -220,8 +218,11 @@ def main():
                         for v in proposal.get('policy_violations', []):
                             st.write(f"  - {v}")
                 
-                # Reasoning comes from the review agent, not the proposal itself
-                st.info(f"**Agent Reasoning:** {review.get('reasoning', 'No reasoning provided.')}")
+                # Reasoning comes from the review agent, structured specifically for the approver
+                if review.get("recommendation_for_approver"):
+                    st.success("**Agent Reasoning:**\n\n" + review['recommendation_for_approver'])
+                else:
+                    st.info(f"**Agent Reasoning:** {review.get('reasoning', 'No reasoning provided.')}")
                 
                 with st.form("approval_form"):
                     decision_radio = st.radio("Decision", ["APPROVED", "REJECTED"])

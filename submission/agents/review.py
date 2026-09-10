@@ -53,7 +53,7 @@ Q8. Is the proposal grounded in evidence IDs? (can every fact be traced?)
 ## Critical Rules
 - NEVER invent numbers. Use ONLY the evidence from the proposal and tool outputs.
 - Your policy_questions_answered dict must map Q1-Q8 to specific evidence-based answers.
-- Your recommendation_for_approver must highlight what the human needs to know.
+- Your recommendation_for_approver must explicitly include: why the vendor was selected, why the quantity is what it is, cost breakdown with per unit cost, estimated delivery date, and key policy details. Format it as a clear Markdown list.
 - If evidence is missing, say so — do not fill in gaps with assumptions.
 """
 

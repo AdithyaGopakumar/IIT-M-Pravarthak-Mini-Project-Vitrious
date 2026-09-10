@@ -174,6 +174,6 @@ class ReviewResult(BaseModel):
     )
     recommendation_for_approver: str = Field(
         default="",
-        description="Key points the human approver should know when making their decision",
+        description="MUST explicitly include as a Markdown list: why the vendor was selected, why the quantity is what it is, cost breakdown with per unit cost, estimated delivery date, and key policy details.",
     )
 
