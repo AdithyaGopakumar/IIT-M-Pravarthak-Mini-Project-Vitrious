@@ -25,13 +25,14 @@ class InvestigationResult(BaseModel):
     action is needed.
     """
 
-    status: Literal["AT_RISK", "NO_ACTION", "BLOCKED", "NEEDS_INFORMATION"] = Field(
+    status: Literal["AT_RISK", "NO_ACTION", "BLOCKED", "NEEDS_INFORMATION", "INVALID_INPUT"] = Field(
         ...,
         description=(
             "AT_RISK: stock below target coverage, proceed to sourcing. "
             "NO_ACTION: stock is healthy. "
             "BLOCKED: stale data, inactive product, or unrecoverable error. "
-            "NEEDS_INFORMATION: insufficient sales data or missing info."
+            "NEEDS_INFORMATION: insufficient sales data or missing info. "
+            "INVALID_INPUT: invalid or non-existent SKU or warehouse ID."
         ),
     )
     sku: str = Field(..., description="Product SKU investigated")

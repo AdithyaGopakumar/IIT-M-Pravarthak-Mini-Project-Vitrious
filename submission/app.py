@@ -83,6 +83,8 @@ def main():
                     else:
                         # Graph completed
                         st.session_state.is_paused = False
+                        
+                    st.session_state.just_finished_run = True
 
                 st.rerun()
 
@@ -96,6 +98,42 @@ def main():
         return
         
     st.header(f"Case: {state.get('case_id')}")
+    
+    if st.session_state.pop("just_finished_run", False):
+        if st.session_state.is_paused:
+            st.markdown(
+                """
+                <style>
+                div[data-testid="stToast"] {
+                    background-color: #e0f2fe !important;
+                    border-left: 5px solid #0284c7 !important;
+                }
+                div[data-testid="stToast"] * {
+                    color: #0c4a6e !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+            st.toast("⏸️ Workflow paused for human approval.", icon="⏳")
+        else:
+            st.markdown(
+                """
+                <style>
+                div[data-testid="stToast"] {
+                    background-color: #dcfce7 !important;
+                    border-left: 5px solid #16a34a !important;
+                }
+                div[data-testid="stToast"] * {
+                    color: #14532d !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+            st.toast("✅ Workflow run complete!", icon="🎉")
+            if state.get("outcome") == "PURCHASE_REQUEST_CREATED":
+                st.balloons()
     
     # Hide interrupt UI from top level (moved into the tabs)
     if st.session_state.is_paused:
@@ -247,6 +285,7 @@ def main():
                             current_graph_state = graph.get_state(config)
                             st.session_state.current_state = current_graph_state.values
                             st.session_state.is_paused = bool(current_graph_state.next)
+                            st.session_state.just_finished_run = True
                             st.rerun()
 
         # Step 6: Execution result

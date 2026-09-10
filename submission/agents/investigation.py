@@ -90,6 +90,40 @@ def investigation_agent_node(state: InventraState) -> dict:
     has enough evidence, then produces a structured InvestigationResult.
     """
     from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+    from tools.inventory import get_product, get_stock_position
+    from domain.tool_models import ErrorCode
+
+    sku = state.get("sku", "")
+    warehouse_id = state.get("warehouse_id", "")
+    
+    # Deterministic pre-flight checks
+    prod_record = get_product(sku)
+    if prod_record.error == ErrorCode.NOT_FOUND:
+        return {
+            "investigation_result": {
+                "status": "INVALID_INPUT",
+                "reasoning": f"Invalid request: Stock with given SKU '{sku}' does not exist.",
+                "error_code": "INVALID_INPUT",
+                "error_message": f"Stock with given SKU '{sku}' does not exist.",
+                "sku": sku,
+                "warehouse_id": warehouse_id
+            },
+            "outcome": "INVALID_INPUT"
+        }
+    
+    stock_record = get_stock_position(sku, warehouse_id)
+    if stock_record.error == ErrorCode.NOT_FOUND:
+        return {
+            "investigation_result": {
+                "status": "INVALID_INPUT",
+                "reasoning": f"Invalid request: Warehouse with given ID '{warehouse_id}' does not exist (or has no inventory record for this SKU).",
+                "error_code": "INVALID_INPUT",
+                "error_message": f"Warehouse with given ID '{warehouse_id}' does not exist.",
+                "sku": sku,
+                "warehouse_id": warehouse_id
+            },
+            "outcome": "INVALID_INPUT"
+        }
 
     llm_with_tools, tools = _build_investigation_agent()
     tool_map = {t.name: t for t in tools}
@@ -189,9 +223,9 @@ def investigation_agent_node(state: InventraState) -> dict:
 
     # Set outcome for terminal statuses
     status = result_dict.get("status")
-    if status in ("NO_ACTION", "BLOCKED", "NEEDS_INFORMATION"):
+    if status in ("NO_ACTION", "BLOCKED", "NEEDS_INFORMATION", "INVALID_INPUT"):
         updates["outcome"] = status
-        if status == "BLOCKED":
+        if status in ("BLOCKED", "INVALID_INPUT"):
             updates["error_code"] = result_dict.get("error_code", "DATA_STALE")
             updates["error_message"] = result_dict.get("error_message", result_dict.get("reasoning", ""))
 
