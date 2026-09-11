@@ -20,6 +20,7 @@ from domain.tool_models import (
     ProposalDraftInput,
     PolicyGuidanceInput,
     ProductInput,
+    PendingPurchaseOrdersInput,
     PurchaseRequestInput,
     RevalidationInput,
     SalesInput,
@@ -33,6 +34,7 @@ from tools.execution import (
     append_audit_event,
     create_purchase_request,
     revalidate_approved_proposal,
+    get_pending_purchase_orders,
 )
 from tools.inventory import calculate_stock_risk, get_product, get_stock_position
 from tools.policy import get_budget_position, get_policy_guidance
@@ -139,6 +141,10 @@ def append_audit_event_tool(
     )
 
 
+def get_pending_purchase_orders_tool(sku: str, warehouse_id: str) -> dict:
+    return get_pending_purchase_orders(sku, warehouse_id)
+
+
 def recommend_vendor_option_tool(
     case_id: str,
     sku: str,
@@ -206,6 +212,12 @@ def build_langchain_tools(include_write_tools: bool = False) -> List[StructuredT
             name="get_product",
             description="Look up a product by SKU and return typed product facts with evidence.",
             args_schema=ProductInput,
+        ),
+        StructuredTool.from_function(
+            func=get_pending_purchase_orders_tool,
+            name="get_pending_purchase_orders",
+            description="Check for existing active (PENDING or CONFIRMED) purchase orders for a SKU at a warehouse.",
+            args_schema=PendingPurchaseOrdersInput,
         ),
         StructuredTool.from_function(
             func=get_stock_position_tool,

@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS purchase_requests (
     idempotency_key TEXT NOT NULL UNIQUE,
     approved_by TEXT,
     approved_at TIMESTAMP,
+    expected_arrival_date TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (vendor_id) REFERENCES vendors(vendor_id),
     FOREIGN KEY (sku) REFERENCES products(sku)

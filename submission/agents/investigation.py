@@ -5,7 +5,7 @@ then running the deterministic stock-risk calculation to decide whether
 replenishment action is needed.
 
 Tools available: get_product, get_stock_position, get_sales_velocity,
-                 calculate_stock_risk
+                 calculate_stock_risk, get_pending_purchase_orders
 """
 
 from __future__ import annotations
@@ -37,14 +37,16 @@ Investigate one SKU at one warehouse. Determine if replenishment action is neede
    - daily_velocity = the 7-day sales average (prefer recent data)
    - target_cover_days = from the case input
    - snapshot_captured_at = captured_at from the stock position
+5. If at_risk = true, you MUST call get_pending_purchase_orders to check for existing active purchase orders.
 
 ## Decision Rules
-- If get_product returns NOT_FOUND → status = NEEDS_INFORMATION
+- If get_product returns NOT_FOUND → status = INVALID_INPUT
 - If get_product returns INACTIVE → status = BLOCKED
 - If get_sales_velocity returns INSUFFICIENT_DATA → status = NEEDS_INFORMATION
 - If calculate_stock_risk returns stale = true → status = BLOCKED (cite DATA_STALE)
 - If at_risk = false → status = NO_ACTION
-- If at_risk = true → status = AT_RISK
+- If at_risk = true AND get_pending_purchase_orders shows a pending order that arrives BEFORE the projected_stockout_date → status = NO_ACTION (cite the incoming pending order in reasoning)
+- If at_risk = true AND NO pending order arrives in time → status = AT_RISK
 
 ## Critical Rules
 - NEVER invent stock levels, sales figures, or dates. Use ONLY tool outputs.
@@ -57,7 +59,7 @@ Investigate one SKU at one warehouse. Determine if replenishment action is neede
 # ── Tool filtering ─────────────────────────────────────────────────────────
 
 _INVESTIGATION_TOOL_NAMES = frozenset(
-    ["get_product", "get_stock_position", "get_sales_velocity", "calculate_stock_risk"]
+    ["get_product", "get_stock_position", "get_sales_velocity", "calculate_stock_risk", "get_pending_purchase_orders"]
 )
 
 

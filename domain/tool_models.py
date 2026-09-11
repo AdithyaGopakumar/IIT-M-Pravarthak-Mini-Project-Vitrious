@@ -118,6 +118,12 @@ class StockPositionInput(BaseModel):
     warehouse_id: str = Field(..., description="Warehouse identifier")
 
 
+class PendingPurchaseOrdersInput(BaseModel):
+    """Input to get_pending_purchase_orders()."""
+    sku: str = Field(..., description="Product SKU")
+    warehouse_id: str = Field(..., description="Warehouse identifier")
+
+
 class StockRiskInput(BaseModel):
     """Input to calculate_stock_risk()."""
     available_units: int = Field(..., description="Current available units")

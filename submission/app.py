@@ -55,7 +55,7 @@ def main():
     with st.sidebar:
         st.header("New Case")
         with st.form("new_case_form"):
-            sku = st.text_input("SKU", value="AC-003")
+            sku = st.text_input("SKU", value="AC-007")
             warehouse = st.text_input("Warehouse ID", value="DEL-01")
             target_days = st.number_input("Target Cover Days", value=DEFAULT_TARGET_COVER_DAYS, min_value=7, max_value=45)
             

@@ -133,8 +133,8 @@ def create_purchase_request(
             INSERT INTO purchase_requests (
                 request_id, case_id, vendor_id, sku, warehouse_id,
                 quantity, unit_price, total_cost, status, idempotency_key,
-                approved_by, approved_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                approved_by, approved_at, expected_arrival_date, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 request_id,
@@ -149,6 +149,7 @@ def create_purchase_request(
                 idempotency_key,
                 approved_by,
                 now,
+                proposal.expected_arrival,
                 now,
             )
         )
@@ -264,3 +265,52 @@ def append_audit_event(
             created=False,
             error=ErrorCode.WRITE_FAILED,
         )
+
+
+def get_pending_purchase_orders(sku: str, warehouse_id: str) -> dict:
+    """
+    Get all active (PENDING or CONFIRMED) purchase orders for a given SKU and Warehouse.
+    
+    Returns a list of dicts with PO details.
+    """
+    try:
+        conn = _get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """
+            SELECT request_id, vendor_id, quantity, expected_arrival_date, status
+            FROM purchase_requests 
+            WHERE sku = ? AND warehouse_id = ? AND status IN ('PENDING', 'CONFIRMED')
+            ORDER BY expected_arrival_date ASC
+            """,
+            (sku, warehouse_id)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        
+        orders = []
+        for row in rows:
+            orders.append({
+                "request_id": row["request_id"],
+                "vendor_id": row["vendor_id"],
+                "quantity": row["quantity"],
+                "expected_arrival_date": row["expected_arrival_date"],
+                "status": row["status"],
+            })
+            
+        return {
+            "sku": sku,
+            "warehouse_id": warehouse_id,
+            "pending_orders": orders,
+            "has_pending_orders": len(orders) > 0,
+            "error": None
+        }
+    except Exception as e:
+        return {
+            "sku": sku,
+            "warehouse_id": warehouse_id,
+            "pending_orders": [],
+            "has_pending_orders": False,
+            "error": str(e)
+        }

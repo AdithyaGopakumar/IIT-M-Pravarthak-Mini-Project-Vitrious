@@ -51,6 +51,7 @@ def seed_data(db_path="database/inventra.db"):
         ("AC-004", "Air Conditioner Unit (Over Budget)", "Appliances", 1, now - timedelta(days=4)),
         ("AC-005", "Air Conditioner Unit (New SKU)", "Appliances", 1, now - timedelta(days=10)),
         ("AC-006", "Air Conditioner Unit (Unreliable Vendor)", "Appliances", 1, now - timedelta(days=5)),
+        ("AC-007", "Air Conditioner Unit (Duplicate PO)", "Appliances", 1, now - timedelta(days=2)),
         ("REF-001", "Refrigerator", "Appliances", 1, now - timedelta(days=30)),
         ("TV-001", "Television", "Electronics", 1, now - timedelta(days=45)),
     ]
@@ -103,6 +104,9 @@ def seed_data(db_path="database/inventra.db"):
         
         # AC-006: Unreliable vendor
         ("INV-AC006-1", "AC-006", "DEL-01", 12, 2, 0, now - timedelta(minutes=40)),
+        
+        # AC-007: Duplicate PO test
+        ("INV-AC007-1", "AC-007", "DEL-01", 10, 5, 0, now - timedelta(minutes=10)),
     ]
     
     for snapshot_id, sku, warehouse, on_hand, reserved, inbound, captured in inventory_data:
@@ -171,6 +175,15 @@ def seed_data(db_path="database/inventra.db"):
             (f"SALE-AC006-{i}", sale_date, "AC-006", "DEL-01", 2)
         )
     
+    # AC-007: Duplicate PO test
+    for i in range(30):
+        sale_date = (now - timedelta(days=30-i)).date()
+        cursor.execute(
+            """INSERT INTO sales_daily (sale_id, sale_date, sku, warehouse_id, units_sold)
+               VALUES (?, ?, ?, ?, ?)""",
+            (f"SALE-AC007-{i}", sale_date, "AC-007", "DEL-01", 2)
+        )
+    
     # =========================================================================
     # VENDOR OFFERS
     # =========================================================================
@@ -202,6 +215,9 @@ def seed_data(db_path="database/inventra.db"):
         ("OFFER-006-1", "V-UNRELIABLE", "AC-006", 150, 5, 3, now_utc + timedelta(days=30)),  # Unreliable
         ("OFFER-006-2", "V-SLOW", "AC-006", 160, 5, 4, now_utc + timedelta(days=30)),       # Unreliable
         ("OFFER-006-3", "V-FAST", "AC-006", 250, 5, 2, now_utc - timedelta(days=1)),        # Expired
+        
+        # AC-007: Duplicate PO test
+        ("OFFER-007-1", "V-FAST", "AC-007", 250, 5, 2, now_utc + timedelta(days=30)),
     ]
     
     offer_created_at = {
@@ -219,6 +235,7 @@ def seed_data(db_path="database/inventra.db"):
         "OFFER-006-1": now - timedelta(days=8),
         "OFFER-006-2": now - timedelta(days=8),
         "OFFER-006-3": now - timedelta(days=10),
+        "OFFER-007-1": now - timedelta(days=2),
     }
 
     for offer_id, vendor_id, sku, price, moq, lead_time, valid_until in offers:
@@ -240,6 +257,16 @@ def seed_data(db_path="database/inventra.db"):
            (budget_id, warehouse_id, month, budget_amount, spent_amount, committed_amount, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         ("BUDGET-DEL01-2026-08", "DEL-01", current_month, 50000, 30000, 5000, now - timedelta(days=1), now - timedelta(hours=4))
+    )
+    
+    # =========================================================================
+    # PURCHASE REQUESTS
+    # =========================================================================
+    cursor.execute(
+        """INSERT INTO purchase_requests 
+           (request_id, case_id, vendor_id, sku, warehouse_id, quantity, unit_price, total_cost, status, idempotency_key, expected_arrival_date, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ("PR-AC007-1", "case-dummy", "V-FAST", "AC-007", "DEL-01", 50, 250.0, 12500.0, "PENDING", "idem-ac007-1", now + timedelta(days=2), now - timedelta(hours=2))
     )
     
     # =========================================================================
