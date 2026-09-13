@@ -7,35 +7,35 @@ This document satisfies the design deliverables for the Stockout Resolution Syst
 ```mermaid
 graph TD
     START([Start]) --> VALIDATE[validate_input]
-    VALIDATE -->|Invalid| TERMINAL_NEEDS_INFO[NEEDS_INFORMATION]
-    VALIDATE -->|Valid| INVESTIGATE[Investigation Agent]
+    VALIDATE -->|Missing fields or bad data| TERMINAL_NEEDS_INFO[NEEDS_INFORMATION]
+    VALIDATE -->|Data valid| INVESTIGATE[Investigation Agent]
     
-    INVESTIGATE -->|INVALID_INPUT| TERMINAL_INVALID[INVALID_INPUT]
-    INVESTIGATE -->|NO_ACTION| TERMINAL_NO_ACTION[NO_ACTION]
-    INVESTIGATE -->|BLOCKED| TERMINAL_BLOCKED_INVEST[BLOCKED]
-    INVESTIGATE -->|NEEDS_INFO| TERMINAL_NEEDS_INFO2[NEEDS_INFORMATION]
-    INVESTIGATE -->|AT_RISK| SOURCE[Sourcing Agent]
+    INVESTIGATE -->|Non-existent SKU or Warehouse| TERMINAL_INVALID[INVALID_INPUT]
+    INVESTIGATE -->|Stock healthy or pending PO found| TERMINAL_NO_ACTION[NO_ACTION]
+    INVESTIGATE -->|Stale data >48h or missing product| TERMINAL_BLOCKED_INVEST[BLOCKED]
+    INVESTIGATE -->|Insufficient sales data| TERMINAL_NEEDS_INFO2[NEEDS_INFORMATION]
+    INVESTIGATE -->|Stock below target cover| SOURCE[Sourcing Agent]
     
-    SOURCE -->|BLOCKED| TERMINAL_BLOCKED_SOURCE[BLOCKED]
-    SOURCE -->|PROPOSAL_READY| DRAFT[draft_proposal_node]
+    SOURCE -->|No vendors, expired, or over budget| TERMINAL_BLOCKED_SOURCE[BLOCKED]
+    SOURCE -->|Found valid vendor option| DRAFT[draft_proposal_node]
     
     DRAFT --> REVIEW[Review Agent]
     
-    REVIEW -->|BLOCKED| TERMINAL_BLOCKED_REVIEW[BLOCKED]
-    REVIEW -->|APPROVED_FOR_HUMAN| APPROVAL_PREP[prepare_approval_node]
-    REVIEW -->|NEEDS_REVISION| REVISION_BUMP[revision_bump_node]
-    REVISION_BUMP -->|< 2 loops| SOURCE
+    REVIEW -->|Severe policy violations| TERMINAL_BLOCKED_REVIEW[BLOCKED]
+    REVIEW -->|All 8 policy checks passed| APPROVAL_PREP[prepare_approval_node]
+    REVIEW -->|Fixable issue, request sourcing change| REVISION_BUMP[revision_bump_node]
+    REVISION_BUMP -->|Revision limit not reached| SOURCE
     
     APPROVAL_PREP --> HUMAN[Human Approval Interrupt]
     
-    HUMAN -->|REJECTED| TERMINAL_REJECTED["BLOCKED: Rejected"]
-    HUMAN -->|APPROVED| REVALIDATE[revalidate_node]
+    HUMAN -->|Manager explicitly rejects| TERMINAL_REJECTED["BLOCKED: Rejected"]
+    HUMAN -->|Manager approves| REVALIDATE[revalidate_node]
     
-    REVALIDATE -->|Failed| TERMINAL_BLOCKED_REVAL["BLOCKED: Facts Changed"]
-    REVALIDATE -->|Passed| EXECUTE[execute_node]
+    REVALIDATE -->|DB facts changed during pause| TERMINAL_BLOCKED_REVAL["BLOCKED: Facts Changed"]
+    REVALIDATE -->|Stock/Budget/Vendor still valid| EXECUTE[execute_node]
     
-    EXECUTE -->|Write Error| TERMINAL_WRITE_FAIL["BLOCKED: WRITE_FAILED"]
-    EXECUTE -->|Success| TERMINAL_SUCCESS[PURCHASE_REQUEST_CREATED]
+    EXECUTE -->|Database exception during creation| TERMINAL_WRITE_FAIL["BLOCKED: WRITE_FAILED"]
+    EXECUTE -->|Purchase Request successfully written| TERMINAL_SUCCESS[PURCHASE_REQUEST_CREATED]
 
     style INVESTIGATE fill:#4a90d9,color:white
     style SOURCE fill:#4a90d9,color:white
