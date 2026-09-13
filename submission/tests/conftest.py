@@ -25,10 +25,12 @@ TEST_DB_PATH = str(_project_root / "database" / "test_inventra.db")
 def setup_test_environment(monkeypatch):
     """Set test environment variables before any tests run."""
     monkeypatch.setenv("DATABASE_PATH", "database/test_inventra.db")
+    monkeypatch.setenv("DATA_FRESHNESS_THRESHOLD", "48")
     
     # Reload config to pick up the test DB path
     import submission.config as config
     config.DATABASE_PATH = TEST_DB_PATH
+    config.DATA_FRESHNESS_THRESHOLD_HOURS = 100000
 
 
 @pytest.fixture
@@ -151,20 +153,43 @@ def mock_agents(mocker):
         }
     }
     
+    # We need a proper ReplenishmentProposal for prepare_approval
+    from domain.tool_models import ReplenishmentProposal
+    mock_proposal = ReplenishmentProposal(
+        proposal_id="PROP-123",
+        proposal_hash="testhash",
+        case_id="CASE-123",
+        sku="AC-003",
+        warehouse_id="DEL-01",
+        quantity=10,
+        unit_price=100.0,
+        total_cost=1000.0,
+        budget_remaining=15000.0,
+        recommended_vendor_id="V-BALANCED",
+        recommended_vendor_name="Balanced Vendor",
+        expected_arrival="2026-09-10T00:00:00Z",
+        policy_passed=True,
+        policy_violations=[],
+        all_options_summary="Mock options",
+        trade_off_explanation="Mock explanation",
+        stock_evidence_id="EV-1",
+        sales_evidence_id="EV-2",
+        budget_evidence_id="EV-3",
+        available_units=15,
+        daily_velocity=2.0,
+        target_cover_days=14,
+        projected_stockout_date="2026-09-07T00:00:00Z",
+        created_at="2026-09-01T00:00:00Z",
+    )
+    
     mocks["review"].return_value = {
         "review_result": ReviewResult(
             status="APPROVED_FOR_HUMAN",
             policy_passed=True,
             reasoning="Mocked review",
         ).model_dump(mode="json"),
-        "proposal": {
-            "proposal_id": "PROP-123",
-            "proposal_hash": "testhash",
-            "sku": "AC-003",
-            "warehouse_id": "DEL-01",
-            "recommended_vendor_id": "V-BALANCED",
-            "total_cost": 1000.0,
-        }
+        "proposal": mock_proposal.model_dump(mode="json"),
+        "proposal_hash": "testhash",
     }
     
     yield mocks

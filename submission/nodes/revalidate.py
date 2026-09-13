@@ -15,7 +15,7 @@ from tools.vendors import list_vendor_offers
 from tools.policy import get_budget_position
 from submission.nodes.audit import audit_node
 from submission.state.state import InventraState
-from submission.config import DATA_FRESHNESS_THRESHOLD_HOURS
+from submission import config
 
 
 def _revalidate(proposal: ReplenishmentProposal) -> RevalidationResult:
@@ -40,11 +40,11 @@ def _revalidate(proposal: ReplenishmentProposal) -> RevalidationResult:
         age_hours = (
             datetime.utcnow() - datetime.fromisoformat(str(stock.captured_at))
         ).total_seconds() / 3600
-        if age_hours > DATA_FRESHNESS_THRESHOLD_HOURS:
+        if age_hours > config.DATA_FRESHNESS_THRESHOLD_HOURS:
             stock_valid = False
             errors.append(
                 f"Stock snapshot is {age_hours:.1f}h old "
-                f"(threshold: {DATA_FRESHNESS_THRESHOLD_HOURS}h)"
+                f"(threshold: {config.DATA_FRESHNESS_THRESHOLD_HOURS}h)"
             )
 
     # ── 3. Vendor offer validity ──

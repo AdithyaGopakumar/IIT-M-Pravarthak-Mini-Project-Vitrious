@@ -6,6 +6,7 @@ same human-style process without rebuilding the glue each time.
 """
 
 from __future__ import annotations
+from submission import config
 
 import hashlib
 from datetime import datetime

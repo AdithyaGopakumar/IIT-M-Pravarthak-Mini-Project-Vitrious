@@ -37,7 +37,7 @@ def route_after_validation(state: InventraState) -> str:
 
 def route_after_investigation(state: InventraState) -> str:
     """Route based on investigation outcome."""
-    result = state.get("investigation_result", {})
+    result = state.get("investigation_result") or {}
     status = result.get("status", "BLOCKED")
 
     if status == "AT_RISK":
@@ -48,7 +48,7 @@ def route_after_investigation(state: InventraState) -> str:
 
 def route_after_sourcing(state: InventraState) -> str:
     """Route based on sourcing outcome."""
-    result = state.get("sourcing_result", {})
+    result = state.get("sourcing_result") or {}
     status = result.get("status", "BLOCKED")
 
     if status == "PROPOSAL_READY":
@@ -63,7 +63,7 @@ def route_after_review(state: InventraState) -> str:
     Supports bounded revision: if the reviewer requests revision and
     we haven't exceeded the revision limit, loop back to sourcing.
     """
-    result = state.get("review_result", {})
+    result = state.get("review_result") or {}
     status = result.get("status", "BLOCKED")
 
     if status == "APPROVED_FOR_HUMAN":
@@ -79,7 +79,7 @@ def route_after_review(state: InventraState) -> str:
 
 def route_after_approval(state: InventraState) -> str:
     """Route based on human approval decision."""
-    decision = state.get("approval_decision", {})
+    decision = state.get("approval_decision") or {}
     if decision.get("decision") == "APPROVED":
         return "revalidate"
     # REJECTED → terminal
@@ -88,7 +88,7 @@ def route_after_approval(state: InventraState) -> str:
 
 def route_after_revalidation(state: InventraState) -> str:
     """Route based on revalidation outcome."""
-    result = state.get("revalidation_result", {})
+    result = state.get("revalidation_result") or {}
     if result.get("all_checks_pass"):
         return "execute"
     # Revalidation failed → terminal
@@ -154,11 +154,11 @@ def human_approval_node(state: InventraState) -> dict:
 def terminal_node(state: InventraState) -> dict:
     """Final node — ensures outcome is set and logs terminal audit event."""
     outcome = state.get("outcome")
-    if not outcome:
+    if not outcome or outcome == "NEEDS_REVISION":
         # Infer from available results
         if state.get("purchase_request"):
             outcome = "PURCHASE_REQUEST_CREATED"
-        elif state.get("investigation_result", {}).get("status") == "NO_ACTION":
+        elif (state.get("investigation_result") or {}).get("status") == "NO_ACTION":
             outcome = "NO_ACTION"
         else:
             outcome = "BLOCKED"

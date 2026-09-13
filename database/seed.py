@@ -52,6 +52,7 @@ def seed_data(db_path="database/inventra.db"):
         ("AC-005", "Air Conditioner Unit (New SKU)", "Appliances", 1, now - timedelta(days=10)),
         ("AC-006", "Air Conditioner Unit (Unreliable Vendor)", "Appliances", 1, now - timedelta(days=5)),
         ("AC-007", "Air Conditioner Unit (Duplicate PO)", "Appliances", 1, now - timedelta(days=2)),
+        ("AC-008", "Air Conditioner Unit (Inactive)", "Appliances", 0, now - timedelta(days=10)),
         ("REF-001", "Refrigerator", "Appliances", 1, now - timedelta(days=30)),
         ("TV-001", "Television", "Electronics", 1, now - timedelta(days=45)),
     ]

@@ -1,6 +1,6 @@
 # Vitrious System Design
 
-This document satisfies the design deliverables for the Vitrious Stockout Resolution System challenge.
+This document satisfies the design deliverables for the Stockout Resolution System challenge.
 
 ## 1. Architecture Graph
 
@@ -369,15 +369,21 @@ Every node (agent and deterministic) calls `audit_node()`, which writes a struct
 
 ## 10. Acceptance Scenarios
 
-| # | Scenario | Test SKU | Expected Outcome |
+| # | Scenario | Test Case / SKU | Expected Outcome |
 |---|---|---|---|
 | 1 | Healthy stock | `AC-001` | `NO_ACTION` — stock covers well beyond target |
-| 2 | Stale inventory data | `AC-002` | `BLOCKED` — snapshot older than 48h |
-| 3 | Speed-vs-cost trade-off | `AC-003` | `AWAITING_APPROVAL` → `PURCHASE_REQUEST_CREATED` |
-| 4 | Over-budget proposal | `AC-004` | `BLOCKED` — total cost exceeds remaining budget |
-| 5 | Insufficient sales history | `AC-005` | `NEEDS_INFORMATION` — only 14 days of data |
-| 6 | Unreliable/expired vendors | `AC-006` | `BLOCKED` — no eligible vendors |
-| 7 | Duplicate purchase order | `AC-007` | `NO_ACTION` — pending PO arrives before stockout |
-| 8 | Non-existent SKU | `FAKE-SKU` | `INVALID_INPUT` — deterministic rejection |
-| 9 | Non-existent warehouse | `AC-001` + `FAKE-WH` | `INVALID_INPUT` — deterministic rejection |
-| 10 | Human rejection | Any AT_RISK case | `BLOCKED` — rejected by approver |
+| 2 | Missing required data | `None` SKU | `NEEDS_INFORMATION` — blocked by deterministic validation |
+| 3 | Stale inventory data | `AC-002` | `BLOCKED` — snapshot older than 48h |
+| 4 | Speed-vs-cost trade-off | `AC-003` | `AWAITING_APPROVAL` → `PURCHASE_REQUEST_CREATED` |
+| 5 | Over-budget proposal | `AC-004` | `BLOCKED` — total cost exceeds remaining budget |
+| 6 | Invalid agent output | Any | `BLOCKED` — validation retry limit exceeded |
+| 7 | Data changed post-approval | `AC-003` | `BLOCKED` — revalidation fails due to hash/fact change |
+| 8 | Duplicate approval (Idempotency)| `AC-003` | `PURCHASE_REQUEST_CREATED` — duplicate write skipped safely |
+| 9 | Human rejection | Any AT_RISK case | `BLOCKED` — rejected by approver |
+| 10 | DB write failure | `AC-003` | `BLOCKED` — execute_node handles exceptions safely |
+| 11 | Insufficient sales history | `AC-005` | `NEEDS_INFORMATION` — only 14 days of data |
+| 12 | Unreliable/expired vendors | `AC-006` | `BLOCKED` — no eligible vendors |
+| 13 | Non-existent SKU | `FAKE-SKU-999` | `INVALID_INPUT` — deterministic rejection |
+| 14 | Non-existent warehouse | `FAKE-WH` | `INVALID_INPUT` — deterministic rejection |
+| 15 | Duplicate purchase order | `AC-007` | `NO_ACTION` — pending PO arrives before stockout |
+

@@ -4,6 +4,7 @@ Read-only tools for sales velocity and historical demand.
 """
 
 import sqlite3
+from submission import config
 from datetime import datetime, timedelta
 from typing import Tuple
 from domain.tool_models import (
@@ -12,7 +13,9 @@ from domain.tool_models import (
 )
 
 
-def _get_db_connection(db_path: str = "database/inventra.db"):
+def _get_db_connection(db_path: str = None):
+    if db_path is None:
+        db_path = config.DATABASE_PATH
     """Get database connection."""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row

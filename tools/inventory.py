@@ -4,6 +4,7 @@ Read-only tools for product and stock data.
 """
 
 import sqlite3
+from submission import config
 from datetime import datetime, timedelta
 from typing import Optional
 import uuid
@@ -15,10 +16,11 @@ from domain.tool_models import (
     ErrorCode,
 )
 
-STALE_THRESHOLD_HOURS = 48
 
 
-def _get_db_connection(db_path: str = "database/inventra.db"):
+def _get_db_connection(db_path: str = None):
+    if db_path is None:
+        db_path = config.DATABASE_PATH
     """Get database connection."""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -198,7 +200,7 @@ def calculate_stock_risk(
     now = datetime.utcnow()
     freshness_delta = now - snapshot_captured_at
     freshness_hours = freshness_delta.total_seconds() / 3600
-    stale = freshness_hours > STALE_THRESHOLD_HOURS
+    stale = freshness_hours > config.DATA_FRESHNESS_THRESHOLD_HOURS
 
     return StockRisk(
         available_units=available_units,

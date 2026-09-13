@@ -6,6 +6,7 @@ agents can invoke them with plain dictionaries.
 """
 
 from __future__ import annotations
+from submission import config
 
 from typing import Any, Dict, List
 

@@ -37,7 +37,9 @@ def test_scenario_1_healthy_stock(fresh_db, mock_agents):
     graph = build_graph()
     state = make_initial_state("AC-001", "DEL-01")
     
-    final_state = graph.invoke(state)
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
     
     assert final_state["outcome"] == "NO_ACTION"
     # Sourcing should not be called
@@ -50,7 +52,9 @@ def test_scenario_2_missing_data(fresh_db, mock_agents):
     # SKU is None
     state = make_initial_state(None, "DEL-01")
     
-    final_state = graph.invoke(state)
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
     
     assert final_state["outcome"] == "NEEDS_INFORMATION"
     assert "error_code" in final_state
@@ -76,7 +80,9 @@ def test_scenario_3_stale_stock(fresh_db, mock_agents):
     graph = build_graph()
     state = make_initial_state("AC-002", "DEL-01")
     
-    final_state = graph.invoke(state)
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
     
     assert final_state["outcome"] == "BLOCKED"
     assert final_state["error_code"] == "DATA_STALE"
@@ -115,7 +121,9 @@ def test_scenario_5_over_budget(fresh_db, mock_agents):
     graph = build_graph()
     state = make_initial_state("AC-004", "DEL-01")
     
-    final_state = graph.invoke(state)
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
     
     assert final_state["outcome"] == "BLOCKED"
     mock_agents["review"].assert_not_called()
@@ -139,7 +147,9 @@ def test_scenario_6_invalid_output(fresh_db, mock_agents):
     graph = build_graph()
     state = make_initial_state("AC-001", "DEL-01")
     
-    final_state = graph.invoke(state)
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
     
     assert final_state["outcome"] == "BLOCKED"
     assert final_state["error_code"] == "INVALID_INPUT"
@@ -174,30 +184,47 @@ def test_scenario_8_duplicate_approval(fresh_db, mock_agents):
     # Note: testing pure idempotency requires the DB write to happen.
     # We test it by running execute_node twice manually.
     from submission.nodes.execute import execute_node
-    
+
     state = make_initial_state("AC-003", "DEL-01")
     state["proposal"] = {
         "proposal_id": "PROP-1",
         "proposal_hash": "HASH-1",
+        "case_id": state["case_id"],
         "sku": "AC-003",
         "warehouse_id": "DEL-01",
-        "recommended_vendor_id": "V-BALANCED",
-        "total_cost": 100.0,
-        "quantity": 10,
+        "stock_evidence_id": "stock:INV-AC003-1",
+        "sales_evidence_id": "sales:AC-003:DEL-01",
+        "vendor_evidence_ids": ["offer:OFFER-003-1"],
+        "budget_evidence_id": "budget:DEL-01:2026-09",
+        "available_units": 15,
+        "daily_velocity": 2.0,
         "target_cover_days": 14,
-        "projected_stockout_date": "2026-01-01T00:00:00Z"
+        "projected_stockout_date": "2026-01-01T00:00:00Z",
+        "recommended_vendor_id": "V-BALANCED",
+        "recommended_vendor_name": "Balanced Vendor",
+        "quantity": 10,
+        "unit_price": 10.0,
+        "total_cost": 100.0,
+        "expected_arrival": "2026-01-05T00:00:00Z",
+        "budget_remaining": 15000.0,
+        "policy_passed": True,
+        "policy_violations": [],
+        "cost_vs_speed_trade_off": "Test",
+        "other_options_summary": "Test",
+        "created_at": "2026-01-01T00:00:00Z",
     }
+    state["proposal_hash"] = "HASH-1"
     state["approved_by"] = "TestUser"
-    
+
     # First execution
     res1 = execute_node(state)
     assert res1["outcome"] == "PURCHASE_REQUEST_CREATED"
     assert res1["purchase_request"]["created"] is True
-    
+
     # Second execution (duplicate)
     res2 = execute_node(state)
     assert res2["outcome"] == "PURCHASE_REQUEST_CREATED"
-    assert res2["purchase_request"]["created"] is False # Idempotent hit
+    assert res2["purchase_request"]["created"] is False  # Idempotent hit
 
 
 def test_scenario_9_human_rejection(fresh_db, mock_agents):
@@ -221,17 +248,19 @@ def test_scenario_10_write_failure(fresh_db, mock_agents, mocker):
     """S10: WRITE_FAILURE - DB write error handled gracefully."""
     # Mock the DB write to fail
     mocker.patch("submission.nodes.execute.create_purchase_request", side_effect=Exception("DB Error"))
+    from submission.nodes.execute import execute_node
     
     graph = build_graph()
     state = make_initial_state("AC-003", "DEL-01")
     config = {"configurable": {"thread_id": state["case_id"]}}
     
-    # 1. Run to pause
-    graph.invoke(state, config=config)
+    # 1. Manually craft a state ready for execution
+    state["proposal"] = mock_agents["review"].return_value["proposal"]
+    state["proposal_hash"] = mock_agents["review"].return_value["proposal_hash"]
+    state["approval_decision"] = {"decision": "APPROVED"}
+    state["approved_by"] = "TestUser"
     
-    # 2. Resume with approval
-    decision = {"decision": "APPROVED", "approver": "Test"}
-    final_state = graph.invoke(Command(resume=decision), config=config)
+    final_state = execute_node(state)
     
     assert final_state["outcome"] == "BLOCKED"
     assert final_state["error_code"] == "WRITE_FAILED"
@@ -253,7 +282,9 @@ def test_scenario_11_insufficient_sales_history(fresh_db, mock_agents):
     graph = build_graph()
     state = make_initial_state("AC-005", "DEL-01")
     
-    final_state = graph.invoke(state)
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
     
     assert final_state["outcome"] == "NEEDS_INFORMATION"
 
@@ -271,6 +302,88 @@ def test_scenario_12_unreliable_vendor(fresh_db, mock_agents):
     graph = build_graph()
     state = make_initial_state("AC-006", "DEL-01")
     
-    final_state = graph.invoke(state)
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
     
     assert final_state["outcome"] == "BLOCKED"
+
+
+def test_scenario_13_invalid_sku(fresh_db, mock_agents):
+    """S13: INVALID_SKU - Non-existent SKU returns INVALID_INPUT."""
+    mock_agents["investigation"].return_value = {
+        "investigation_result": InvestigationResult(
+            status="INVALID_INPUT",
+            sku="FAKE-SKU-999",
+            warehouse_id="DEL-01",
+            reasoning="Invalid request: SKU 'FAKE-SKU-999' does not exist.",
+            error_code="INVALID_INPUT",
+            error_message="SKU 'FAKE-SKU-999' does not exist.",
+        ).model_dump(mode="json"),
+        "outcome": "INVALID_INPUT"
+    }
+
+    graph = build_graph()
+    state = make_initial_state("FAKE-SKU-999", "DEL-01")
+    
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
+    
+    assert final_state["outcome"] == "INVALID_INPUT"
+    mock_agents["sourcing"].assert_not_called()
+    mock_agents["review"].assert_not_called()
+
+
+def test_scenario_14_invalid_warehouse(fresh_db, mock_agents):
+    """S14: INVALID_WAREHOUSE - Non-existent warehouse returns INVALID_INPUT."""
+    mock_agents["investigation"].return_value = {
+        "investigation_result": InvestigationResult(
+            status="INVALID_INPUT",
+            sku="AC-001",
+            warehouse_id="FAKE-WH",
+            reasoning="Invalid request: Warehouse 'FAKE-WH' does not exist.",
+            error_code="INVALID_INPUT",
+            error_message="Warehouse 'FAKE-WH' does not exist.",
+        ).model_dump(mode="json"),
+        "outcome": "INVALID_INPUT"
+    }
+
+    graph = build_graph()
+    state = make_initial_state("AC-001", "FAKE-WH")
+    
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
+    
+    assert final_state["outcome"] == "INVALID_INPUT"
+    mock_agents["sourcing"].assert_not_called()
+
+
+def test_scenario_15_duplicate_po(fresh_db, mock_agents):
+    """S15: DUPLICATE_PO - Existing pending PO covers the gap, returns NO_ACTION."""
+    mock_agents["investigation"].return_value = {
+        "investigation_result": InvestigationResult(
+            status="NO_ACTION",
+            sku="AC-007",
+            warehouse_id="DEL-01",
+            available_units=5,
+            daily_velocity=2.0,
+            cover_days=2.5,
+            at_risk=False,
+            reasoning="Pending purchase order PR-AC007-1 arriving in 2 days covers the gap.",
+        ).model_dump(mode="json"),
+        "outcome": "NO_ACTION"
+    }
+
+    graph = build_graph()
+    state = make_initial_state("AC-007", "DEL-01")
+    
+    config = {"configurable": {"thread_id": state["case_id"]}}
+    
+    final_state = graph.invoke(state, config=config)
+    
+    assert final_state["outcome"] == "NO_ACTION"
+    mock_agents["sourcing"].assert_not_called()
+    mock_agents["review"].assert_not_called()
+
