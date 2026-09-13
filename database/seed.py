@@ -205,8 +205,8 @@ def seed_data(db_path="database/inventra.db"):
         ("OFFER-003-2", "V-FAST", "AC-003", 300, 3, 2, now_utc + timedelta(days=30)),   # Expensive, fast (2 days)
         
         # AC-004: Over budget (high-cost offers)
-        ("OFFER-004-1", "V-FAST", "AC-004", 500, 3, 2, now_utc + timedelta(days=30)),
-        ("OFFER-004-2", "V-BALANCED", "AC-004", 450, 5, 3, now_utc + timedelta(days=30)),
+        ("OFFER-004-1", "V-FAST", "AC-004", 700, 3, 2, now_utc + timedelta(days=30)),
+        ("OFFER-004-2", "V-BALANCED", "AC-004", 650, 5, 3, now_utc + timedelta(days=30)),
         
         # AC-005: Offers exist
         ("OFFER-005-1", "V-CHEAP", "AC-005", 200, 10, 5, now_utc + timedelta(days=30)),
