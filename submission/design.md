@@ -65,11 +65,12 @@ graph TD
 | **Output Schema** | `InvestigationResult` — Pydantic model with status, cover_days, at_risk, projected_stockout_date, evidence IDs, reasoning |
 | **Permissions** | Read-only access to inventory, sales, and purchase order data. No vendor, policy, or write access. |
 
-**Tools (5):**
+**Tools (6):**
 
 | Tool | Purpose |
 |---|---|
 | `get_product` | Verify the SKU exists and is active |
+| `get_warehouse` | Verify the warehouse exists |
 | `get_stock_position` | Fetch latest inventory snapshot (on_hand, reserved, confirmed_inbound) |
 | `get_sales_velocity` | Get 7-day and 30-day daily sales averages |
 | `calculate_stock_risk` | Deterministic risk calculation (cover_days, at_risk, projected_stockout_date) |
@@ -206,6 +207,7 @@ graph TD
 | Tool | Investigation | Sourcing | Review | Deterministic Nodes |
 |---|:---:|:---:|:---:|:---:|
 | `get_product` | ✅ | ❌ | ❌ | ❌ |
+| `get_warehouse` | ✅ | ❌ | ❌ | ❌ |
 | `get_stock_position` | ✅ | ❌ | ❌ | ✅ (Revalidate) |
 | `get_sales_velocity` | ✅ | ❌ | ❌ | ❌ |
 | `calculate_stock_risk` | ✅ | ❌ | ❌ | ❌ |

@@ -10,6 +10,7 @@ from typing import Optional
 import uuid
 from domain.tool_models import (
     ProductRecord,
+    WarehouseRecord,
     StockPosition,
     StockRisk,
     StockRiskInput,
@@ -81,6 +82,49 @@ def get_product(sku: str) -> ProductRecord:
             name="",
             category="",
             active=False,
+            evidence_id="",
+            retrieved_at=datetime.utcnow(),
+            error=ErrorCode.UNKNOWN_ERROR,
+        )
+
+
+def get_warehouse(warehouse_id: str) -> WarehouseRecord:
+    """
+    Look up a warehouse by ID.
+    
+    Returns NOT_FOUND if warehouse doesn't exist.
+    """
+    try:
+        conn = _get_db_connection()
+        cursor = conn.cursor()
+        
+        # Checking monthly_budgets table as there is no specific warehouses table
+        cursor.execute(
+            "SELECT warehouse_id FROM monthly_budgets WHERE warehouse_id = ? LIMIT 1",
+            (warehouse_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return WarehouseRecord(
+                warehouse_id=warehouse_id,
+                exists=False,
+                evidence_id="",
+                retrieved_at=datetime.utcnow(),
+                error=ErrorCode.NOT_FOUND,
+            )
+        
+        return WarehouseRecord(
+            warehouse_id=row["warehouse_id"],
+            exists=True,
+            evidence_id=f"warehouse:{warehouse_id}",
+            retrieved_at=datetime.utcnow(),
+        )
+    except Exception as e:
+        return WarehouseRecord(
+            warehouse_id=warehouse_id,
+            exists=False,
             evidence_id="",
             retrieved_at=datetime.utcnow(),
             error=ErrorCode.UNKNOWN_ERROR,

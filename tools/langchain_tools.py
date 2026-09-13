@@ -21,6 +21,7 @@ from domain.tool_models import (
     ProposalDraftInput,
     PolicyGuidanceInput,
     ProductInput,
+    WarehouseInput,
     PendingPurchaseOrdersInput,
     PurchaseRequestInput,
     RevalidationInput,
@@ -37,7 +38,7 @@ from tools.execution import (
     revalidate_approved_proposal,
     get_pending_purchase_orders,
 )
-from tools.inventory import calculate_stock_risk, get_product, get_stock_position
+from tools.inventory import calculate_stock_risk, get_product, get_stock_position, get_warehouse
 from tools.policy import get_budget_position, get_policy_guidance
 from tools.sales import get_sales_velocity
 from tools.vendors import build_vendor_options, get_vendor_performance, list_vendor_offers
@@ -56,6 +57,10 @@ def _dump(model: Any) -> Dict[str, Any]:
 
 def get_product_tool(sku: str) -> Dict[str, Any]:
     return _dump(get_product(sku))
+
+
+def get_warehouse_tool(warehouse_id: str) -> Dict[str, Any]:
+    return _dump(get_warehouse(warehouse_id))
 
 
 def get_stock_position_tool(sku: str, warehouse_id: str) -> Dict[str, Any]:
@@ -213,6 +218,12 @@ def build_langchain_tools(include_write_tools: bool = False) -> List[StructuredT
             name="get_product",
             description="Look up a product by SKU and return typed product facts with evidence.",
             args_schema=ProductInput,
+        ),
+        StructuredTool.from_function(
+            func=get_warehouse_tool,
+            name="get_warehouse",
+            description="Look up a warehouse by ID to verify it exists.",
+            args_schema=WarehouseInput,
         ),
         StructuredTool.from_function(
             func=get_pending_purchase_orders_tool,

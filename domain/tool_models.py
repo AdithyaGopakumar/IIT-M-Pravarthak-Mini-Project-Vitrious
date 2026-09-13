@@ -58,6 +58,15 @@ class ProductRecord(BaseModel):
     error: Optional[ErrorCode] = Field(None, description="Error code if lookup failed")
 
 
+class WarehouseRecord(BaseModel):
+    """Result of get_warehouse()."""
+    warehouse_id: str = Field(..., description="Warehouse identifier")
+    exists: bool = Field(..., description="Whether warehouse exists")
+    evidence_id: str = Field(..., description="Tool evidence ID")
+    retrieved_at: datetime = Field(..., description="UTC timestamp when data was retrieved")
+    error: Optional[ErrorCode] = Field(None, description="Error code if lookup failed")
+
+
 class StockPosition(BaseModel):
     """Result of get_stock_position()."""
     snapshot_id: str = Field(..., description="Unique inventory snapshot ID")
@@ -110,6 +119,11 @@ class SalesInput(BaseModel):
 class ProductInput(BaseModel):
     """Input to get_product()."""
     sku: str = Field(..., description="Product SKU")
+
+
+class WarehouseInput(BaseModel):
+    """Input to get_warehouse()."""
+    warehouse_id: str = Field(..., description="Warehouse identifier")
 
 
 class StockPositionInput(BaseModel):

@@ -59,7 +59,7 @@ Investigate one SKU at one warehouse. Determine if replenishment action is neede
 # ── Tool filtering ─────────────────────────────────────────────────────────
 
 _INVESTIGATION_TOOL_NAMES = frozenset(
-    ["get_product", "get_stock_position", "get_sales_velocity", "calculate_stock_risk", "get_pending_purchase_orders"]
+    ["get_product", "get_warehouse", "get_stock_position", "get_sales_velocity", "calculate_stock_risk", "get_pending_purchase_orders"]
 )
 
 
@@ -92,7 +92,7 @@ def investigation_agent_node(state: InventraState) -> dict:
     has enough evidence, then produces a structured InvestigationResult.
     """
     from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
-    from tools.inventory import get_product, get_stock_position
+    from tools.inventory import get_product, get_stock_position, get_warehouse
     from domain.tool_models import ErrorCode
 
     sku = state.get("sku", "")
@@ -113,14 +113,28 @@ def investigation_agent_node(state: InventraState) -> dict:
             "outcome": "INVALID_INPUT"
         }
     
+    warehouse_record = get_warehouse(warehouse_id)
+    if warehouse_record.error == ErrorCode.NOT_FOUND:
+        return {
+            "investigation_result": {
+                "status": "INVALID_INPUT",
+                "reasoning": f"Invalid request: Warehouse with given ID '{warehouse_id}' does not exist.",
+                "error_code": "INVALID_INPUT",
+                "error_message": f"Warehouse with given ID '{warehouse_id}' does not exist.",
+                "sku": sku,
+                "warehouse_id": warehouse_id
+            },
+            "outcome": "INVALID_INPUT"
+        }
+
     stock_record = get_stock_position(sku, warehouse_id)
     if stock_record.error == ErrorCode.NOT_FOUND:
         return {
             "investigation_result": {
                 "status": "INVALID_INPUT",
-                "reasoning": f"Invalid request: Warehouse with given ID '{warehouse_id}' does not exist (or has no inventory record for this SKU).",
+                "reasoning": f"Invalid request: Inventory record for SKU '{sku}' at warehouse '{warehouse_id}' does not exist.",
                 "error_code": "INVALID_INPUT",
-                "error_message": f"Warehouse with given ID '{warehouse_id}' does not exist.",
+                "error_message": f"Inventory record for SKU '{sku}' at warehouse '{warehouse_id}' does not exist.",
                 "sku": sku,
                 "warehouse_id": warehouse_id
             },
@@ -168,6 +182,8 @@ def investigation_agent_node(state: InventraState) -> dict:
                 # Store evidence in state
                 if tool_name == "get_product":
                     evidence_updates["product"] = result if isinstance(result, dict) else result
+                elif tool_name == "get_warehouse":
+                    evidence_updates["warehouse"] = result if isinstance(result, dict) else result
                 elif tool_name == "get_stock_position":
                     evidence_updates["stock_position"] = result if isinstance(result, dict) else result
                 elif tool_name == "get_sales_velocity":
